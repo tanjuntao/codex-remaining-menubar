@@ -6,13 +6,14 @@ import SwiftUI
 final class MenuBarController: NSObject {
     private static let panelSize = NSSize(width: 312, height: 438)
     private static let panelSpacing: CGFloat = 6
+    private static let fullUsageURL = URL(string: "https://chatgpt.com/codex/settings/usage")!
 
     private let statusItem: NSStatusItem
     private let panel: MenuBarPanel
     private let viewModel: UsageViewModel
     private var cancellables: Set<AnyCancellable> = []
     private var outsideClickMonitor: Any?
-    private var escapeKeyMonitor: Any?
+    private var keyboardMonitor: Any?
 
     init(viewModel: UsageViewModel) {
         self.viewModel = viewModel
@@ -96,7 +97,7 @@ final class MenuBarController: NSObject {
     }
 
     private func installDismissalMonitors() {
-        guard outsideClickMonitor == nil, escapeKeyMonitor == nil else { return }
+        guard outsideClickMonitor == nil, keyboardMonitor == nil else { return }
 
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
@@ -106,14 +107,41 @@ final class MenuBarController: NSObject {
             }
         }
 
-        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
             [weak self] event in
-            guard event.keyCode == 53, self?.panel.isVisible == true else {
+            guard let self, self.panel.isVisible else {
                 return event
             }
-            self?.closePanel()
-            return nil
+            return self.handleKeyboardShortcut(event) ? nil : event
         }
+    }
+
+    private func handleKeyboardShortcut(_ event: NSEvent) -> Bool {
+        if event.keyCode == 53 {
+            closePanel()
+            return true
+        }
+
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.contains(.command),
+              modifiers.intersection([.control, .option, .shift]).isEmpty,
+              let key = event.charactersIgnoringModifiers?.lowercased() else {
+            return false
+        }
+
+        switch key {
+        case "q":
+            NSApplication.shared.terminate(nil)
+        case "w":
+            closePanel()
+        case "r":
+            Task { await viewModel.refresh() }
+        case "u":
+            NSWorkspace.shared.open(Self.fullUsageURL)
+        default:
+            return false
+        }
+        return true
     }
 
     private func showPanel(relativeTo button: NSStatusBarButton) {
@@ -141,9 +169,9 @@ final class MenuBarController: NSObject {
             NSEvent.removeMonitor(outsideClickMonitor)
             self.outsideClickMonitor = nil
         }
-        if let escapeKeyMonitor {
-            NSEvent.removeMonitor(escapeKeyMonitor)
-            self.escapeKeyMonitor = nil
+        if let keyboardMonitor {
+            NSEvent.removeMonitor(keyboardMonitor)
+            self.keyboardMonitor = nil
         }
     }
 

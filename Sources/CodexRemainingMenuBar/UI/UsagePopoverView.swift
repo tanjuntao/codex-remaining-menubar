@@ -58,7 +58,8 @@ struct UsagePopoverView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.borderless)
-                    .help("刷新")
+                    .keyboardShortcut("r", modifiers: .command)
+                    .help("刷新 (⌘R)")
                     .disabled(viewModel.isRefreshing)
                 }
 
@@ -256,6 +257,8 @@ struct UsagePopoverView: View {
                     Label("完整 Usage", systemImage: "arrow.up.right.square")
                 }
                 .buttonStyle(.bordered)
+                .keyboardShortcut("u", modifiers: .command)
+                .help("打开完整 Usage (⌘U)")
 
                 Spacer()
 
@@ -265,6 +268,8 @@ struct UsagePopoverView: View {
                     Label("退出应用", systemImage: "power")
                 }
                 .buttonStyle(.bordered)
+                .keyboardShortcut("q", modifiers: .command)
+                .help("退出应用 (⌘Q)")
                 .tint(.red)
             }
             .controlSize(.regular)
