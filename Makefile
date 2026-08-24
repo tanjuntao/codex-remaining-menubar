@@ -1,4 +1,4 @@
-.PHONY: build test app run clean
+.PHONY: build test app dmg run clean
 
 build:
 	swift build
@@ -8,6 +8,9 @@ test:
 
 app:
 	./Scripts/build-app.sh
+
+dmg:
+	./Scripts/package-dmg.sh
 
 run: app
 	open "dist/Codex Remaining.app"
