@@ -2,21 +2,24 @@ import SwiftUI
 
 struct ResetCreditsBanner: View {
     let snapshot: UsageSnapshot
-    let count: Int
 
     var body: some View {
         let credits = snapshot.availableResetCredits
+        let count = snapshot.resetCreditsAvailable
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 Label("可重置次数", systemImage: "arrow.counterclockwise.circle.fill")
                     .font(.callout.weight(.semibold))
                 Spacer()
-                Text("\(count) 次")
+                Text(count.map { "\($0) 次" } ?? "—")
                     .font(.system(size: 19, weight: .bold, design: .rounded).monospacedDigit())
             }
             .accessibilityElement(children: .combine)
 
-            if credits.isEmpty {
+            if count == 0 {
+                Text("暂无可用重置次数")
+                    .font(.caption)
+            } else if credits.isEmpty {
                 Text("到期时间暂不可用")
                     .font(.caption)
             } else {

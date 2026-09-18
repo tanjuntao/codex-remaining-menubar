@@ -31,7 +31,7 @@ struct TokenUsageTests {
         #expect(snapshot.summary.peakDailyTokens == 1_349_710_279)
         #expect(snapshot.summary.currentStreakDays == 15)
         #expect(snapshot.dailyUsageBuckets?.map(\.startDate) == ["2026-09-12", "2026-09-13", "2026-09-14"])
-        #expect(TokenUsageSnapshot.formattedTokens(snapshot.summary.lifetimeTokens) == "12.3B")
+        #expect(TokenUsageSnapshot.formattedTokens(snapshot.summary.lifetimeTokens) == "12,345.7M")
     }
 
     @Test func preservesUnavailableMetricsAndDailyBuckets() throws {
@@ -63,6 +63,76 @@ struct TokenUsageTests {
         #expect(shanghai.last?.tokens == nil)
         #expect(utc.last?.dateKey == "2026-09-14")
         #expect(utc.last?.tokens == 73_643_060)
+    }
+
+    @Test func tenDayChartIncludesTodayAndPreservesMissingDays() throws {
+        let snapshot = try TokenUsageSnapshot(appServerResult: response(tokenFixture))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-09-15T08:00:00Z"))
+        let days = Array(snapshot.recentDays(count: 10, now: now, timeZone: TimeZone(secondsFromGMT: 28_800)!).reversed())
+        #expect(days.count == 10)
+        #expect(days.first?.dateKey == "2026-09-15")
+        #expect(days.last?.dateKey == "2026-09-06")
+        #expect(days.first?.tokens == nil)
+        #expect(days[1].tokens == 73_643_060)
+    }
+
+    @Test func calendarAlignsWeeksAndDistinguishesMissingFromZero() throws {
+        let snapshot = try TokenUsageSnapshot(appServerResult: response(tokenFixture))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-09-15T08:00:00Z"))
+        let weeks = snapshot.calendarWeeks(now: now, timeZone: TimeZone(secondsFromGMT: 28_800)!)
+        #expect(weeks.map(\.startDateKey) == ["2026-09-07", "2026-09-14"])
+        #expect(weeks[0].days[0]?.dateKey == nil)
+        #expect(weeks[0].days[5]?.tokens == 0)
+        #expect(weeks[0].days[6]?.tokens == 65_580_616)
+        #expect(weeks[1].days[0]?.tokens == 73_643_060)
+        #expect(weeks[1].days[1]?.dateKey == "2026-09-15")
+        #expect(weeks[1].days[1]?.tokens == nil)
+        #expect(weeks[1].days[2]?.dateKey == nil)
+    }
+
+    @Test func allTokenAmountsUseMillions() {
+        #expect(TokenUsageSnapshot.formattedTokens(nil) == "—")
+        #expect(TokenUsageSnapshot.formattedTokens(0) == "0M")
+        #expect(TokenUsageSnapshot.formattedTokens(500) == "<0.001M")
+        #expect(TokenUsageSnapshot.formattedTokens(73_643_060) == "73.6M")
+        #expect(TokenUsageSnapshot.formattedTokens(900_000) == "0.9M")
+        #expect(TokenUsageSnapshot.formattedTokens(1_349_710_279) == "1,349.7M")
+    }
+
+    @Test func calendarPreservesLeapDayAndMonthBoundary() throws {
+        let snapshot = try TokenUsageSnapshot(appServerResult: response(#"""
+        {"summary":{},"dailyUsageBuckets":[
+          {"startDate":"2024-03-01","tokens":0},
+          {"startDate":"2024-02-28","tokens":1000000}
+        ]}
+        """#))
+        let now = try #require(ISO8601DateFormatter().date(from: "2024-03-01T08:00:00Z"))
+        let weeks = snapshot.calendarWeeks(now: now, timeZone: TimeZone(secondsFromGMT: 0)!)
+        #expect(weeks.count == 1)
+        #expect(weeks[0].startDateKey == "2024-02-26")
+        #expect(weeks[0].days[2]?.tokens == 1_000_000)
+        #expect(weeks[0].days[3]?.dateKey == "2024-02-29")
+        #expect(weeks[0].days[3]?.tokens == nil)
+        #expect(weeks[0].days[4]?.dateKey == "2024-03-01")
+        #expect(weeks[0].days[4]?.tokens == 0)
+        #expect(weeks[0].days[5] == nil)
+    }
+
+    @Test func calendarDoesNotSkipDatesWhenDaylightSavingStarts() throws {
+        let snapshot = try TokenUsageSnapshot(appServerResult: response(#"""
+        {"summary":{},"dailyUsageBuckets":[{"startDate":"2026-03-07","tokens":1000000}]}
+        """#))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-03-10T16:00:00Z"))
+        let timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let weeks = snapshot.calendarWeeks(now: now, timeZone: timeZone)
+        #expect(weeks.flatMap(\.days).compactMap { $0?.dateKey } == ["2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10"])
+    }
+
+    @Test func calendarWithoutBucketsDoesNotInventZeroUsage() throws {
+        for buckets in ["null", "[]"] {
+            let snapshot = try TokenUsageSnapshot(appServerResult: response("{\"summary\":{},\"dailyUsageBuckets\":\(buckets)}"))
+            #expect(snapshot.calendarWeeks().isEmpty)
+        }
     }
 
     @Test(arguments: [

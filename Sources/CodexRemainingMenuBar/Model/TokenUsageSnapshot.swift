@@ -22,6 +22,12 @@ struct TokenUsageSnapshot: Codable, Equatable, Sendable {
         var shortLabel: String { String(dateKey.suffix(5)).replacingOccurrences(of: "-", with: "/") }
     }
 
+    struct CalendarWeek: Identifiable {
+        let startDateKey: String
+        let days: [Day?]
+        var id: String { startDateKey }
+    }
+
     let summary: Summary
     let dailyUsageBuckets: [DailyBucket]?
     let fetchedAt: Date
@@ -79,9 +85,42 @@ struct TokenUsageSnapshot: Codable, Equatable, Sendable {
         }
     }
 
+    // Arrange every returned date in Monday-to-Sunday columns. Missing dates within the
+    // covered range remain unknown; only an explicit server bucket represents zero usage.
+    func calendarWeeks(now: Date = Date(), timeZone: TimeZone = .current) -> [CalendarWeek] {
+        guard let buckets = dailyUsageBuckets, let firstBucket = buckets.first else { return [] }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        calendar.firstWeekday = 2
+        let formatter = Self.dateFormatter(timeZone: timeZone)
+        guard let firstDate = formatter.date(from: firstBucket.startDate),
+              let firstWeek = calendar.dateInterval(of: .weekOfYear, for: firstDate)?.start else { return [] }
+
+        let lastBucketDate = buckets.last.flatMap { formatter.date(from: $0.startDate) } ?? now
+        let lastDate = max(calendar.startOfDay(for: now), lastBucketDate)
+        let byDate = Dictionary(buckets.map { ($0.startDate, $0.tokens) }, uniquingKeysWith: { _, last in last })
+        var weeks: [CalendarWeek] = []
+        var weekStart = firstWeek
+        while weekStart <= lastDate {
+            let days = (0..<7).map { offset -> Day? in
+                guard let date = calendar.date(byAdding: .day, value: offset, to: weekStart),
+                      date >= firstDate, date <= lastDate else { return nil }
+                let key = formatter.string(from: date)
+                return Day(dateKey: key, tokens: byDate[key])
+            }
+            weeks.append(CalendarWeek(startDateKey: formatter.string(from: weekStart), days: days))
+            guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) else { break }
+            weekStart = next
+        }
+        return weeks
+    }
+
     static func formattedTokens(_ tokens: Int64?) -> String {
         guard let tokens else { return "—" }
-        return tokens.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))
+        if tokens > 0 && tokens < 1_000 { return "<0.001M" }
+        let millions = Double(tokens) / 1_000_000
+        let digits = millions < 1 ? 3 : 1
+        return millions.formatted(.number.precision(.fractionLength(0...digits)).locale(Locale(identifier: "en_US"))) + "M"
     }
 
     private static func dateFormatter(timeZone: TimeZone) -> DateFormatter {

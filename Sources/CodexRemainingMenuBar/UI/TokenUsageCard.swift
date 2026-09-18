@@ -58,23 +58,18 @@ struct TokenUsageCard: View {
 
     @ViewBuilder
     private func activity(_ snapshot: TokenUsageSnapshot) -> some View {
-        let days = snapshot.recentDays()
+        let days = snapshot.recentDays(count: 10)
         let today = days.last
-        let yesterday = days.dropLast().last
         let selected = days.first { $0.dateKey == selectedDate }
             ?? days.last { $0.tokens != nil }
             ?? today
 
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            metric("今日", tokens: today?.tokens)
-            metric("昨日", tokens: yesterday?.tokens)
-            metric("累计", tokens: snapshot.summary.lifetimeTokens)
-        }
+        metric("总消耗", tokens: snapshot.summary.lifetimeTokens)
 
         if snapshot.dailyUsageBuckets != nil {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("近 7 天")
+                    Text("近 10 天 · 由近及远")
                         .foregroundStyle(.secondary)
                     Spacer()
                     if let selected {
@@ -84,8 +79,8 @@ struct TokenUsageCard: View {
                 }
                 .font(.caption)
 
-                HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(days) { day in
+                VStack(spacing: 9) {
+                    ForEach(Array(days.reversed())) { day in
                         dayBar(day, maximum: days.compactMap(\.tokens).max() ?? 0, selected: day.dateKey == selected?.dateKey)
                     }
                 }
@@ -111,22 +106,9 @@ struct TokenUsageCard: View {
                 .foregroundStyle(.secondary)
         }
 
-        if let buckets = snapshot.dailyUsageBuckets, !buckets.isEmpty {
-            DisclosureGroup("每日明细") {
-                LazyVStack(spacing: 6) {
-                    ForEach(buckets.reversed()) { bucket in
-                        HStack {
-                            Text(bucket.startDate)
-                            Spacer()
-                            Text("\(Double(bucket.tokens) / 1_000_000, specifier: "%.1f")M")
-                                .textSelection(.enabled)
-                        }
-                        .font(.caption.monospacedDigit())
-                    }
-                }
-                .padding(.top, 6)
-            }
-            .font(.caption)
+        if snapshot.dailyUsageBuckets?.isEmpty == false {
+            Divider()
+            TokenUsageCalendar(snapshot: snapshot)
         }
     }
 
@@ -136,34 +118,46 @@ struct TokenUsageCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(TokenUsageSnapshot.formattedTokens(tokens))
-                .font(.system(size: 19, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(tokens.map { "\(title)：\($0.formatted()) tokens" } ?? "\(title)：服务端尚未返回数据")
+        .help(tokens.map { "\(title)：\(TokenUsageSnapshot.formattedTokens($0))" } ?? "\(title)：服务端尚未返回数据")
     }
 
     private func dayBar(_ day: TokenUsageSnapshot.Day, maximum: Int64, selected: Bool) -> some View {
-        let height = maximum > 0 ? max(3, 48 * Double(day.tokens ?? 0) / Double(maximum)) : 3
+        let ratio = maximum > 0 ? Double(day.tokens ?? 0) / Double(maximum) : 0
         return Button {
             selectedDate = day.dateKey
         } label: {
             VStack(spacing: 4) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(day.tokens == nil ? Color.secondary.opacity(0.15) : Color.accentColor.opacity(selected ? 1 : 0.4))
-                    .frame(height: height)
-                    .frame(height: 48, alignment: .bottom)
-                Text(day.shortLabel)
-                    .font(.system(size: 9).monospacedDigit())
-                    .foregroundStyle(selected ? .primary : .secondary)
+                HStack {
+                    Text(day.shortLabel)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(day.tokens == nil ? "尚未返回" : TokenUsageSnapshot.formattedTokens(day.tokens))
+                        .fontWeight(.medium)
+                        .foregroundStyle(day.tokens == nil ? .secondary : .primary)
+                }
+                .font(.caption.monospacedDigit())
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.secondary.opacity(0.12))
+                        Capsule()
+                            .fill(Color.accentColor.opacity(selected ? 1 : 0.5))
+                            .frame(width: ratio > 0 ? max(2, geometry.size.width * ratio) : 0)
+                    }
+                }
+                .frame(height: 7)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(day.dateKey)：\(day.tokens.map { "\($0.formatted()) tokens" } ?? "尚未返回")")
-        .accessibilityLabel("\(day.dateKey)，\(day.tokens.map { "\($0) tokens" } ?? "尚未返回")")
+        .help("\(day.dateKey)：\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "尚未返回")")
+        .accessibilityLabel("\(day.dateKey)，\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "尚未返回")")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

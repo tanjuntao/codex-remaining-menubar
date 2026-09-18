@@ -9,30 +9,25 @@ struct UsagePopoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
 
-            if !viewModel.needsSignIn,
-               let snapshot = viewModel.snapshot,
-               let count = snapshot.resetCreditsAvailable, count > 0 {
-                ResetCreditsBanner(snapshot: snapshot, count: count)
-            }
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if viewModel.needsSignIn {
                         signInState
                     } else {
-                        TokenUsageCard(
-                            snapshot: viewModel.tokenUsage,
-                            isRefreshing: viewModel.isRefreshing,
-                            errorMessage: viewModel.tokenUsageError
-                        )
-
                         if let snapshot = viewModel.snapshot {
-                            limits(snapshot)
+                            quotaCard(snapshot)
+                            ResetCreditsBanner(snapshot: snapshot)
                         } else if viewModel.isRefreshing {
                             loadingState
                         } else {
                             emptyState
                         }
+
+                        TokenUsageCard(
+                            snapshot: viewModel.tokenUsage,
+                            isRefreshing: viewModel.isRefreshing,
+                            errorMessage: viewModel.tokenUsageError
+                        )
                     }
 
                     if let errorMessage = viewModel.errorMessage {
@@ -46,7 +41,7 @@ struct UsagePopoverView: View {
             footer
         }
         .padding(14)
-        .frame(width: 336)
+        .frame(width: 380)
     }
 
     private var header: some View {
@@ -91,39 +86,67 @@ struct UsagePopoverView: View {
         }
     }
 
-    @ViewBuilder
-    private func limits(_ snapshot: UsageSnapshot) -> some View {
-        VStack(spacing: 12) {
-            ForEach(snapshot.limits) { limit in
-                limitCard(limit)
-            }
-        }
-    }
+    private func quotaCard(_ snapshot: UsageSnapshot) -> some View {
+        let codex = snapshot.limits.first { $0.id == "codex" } ?? snapshot.limits.first
+        let weekly = codex?.windows.first { $0.windowDurationMinutes == 10_080 }
+        let featuredWindow = weekly ?? codex?.windows.first
+        let otherWindows = codex?.windows.filter { $0.id != featuredWindow?.id } ?? []
+        let otherLimits = snapshot.limits.filter { $0.id != codex?.id }
 
-    private func limitCard(_ limit: UsageLimit) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(limit.displayName)
+                Text(weekly == nil ? "\(codex?.displayName ?? "Codex") 剩余额度" : "\(codex?.displayName ?? "Codex") 7 天剩余窗口")
                     .font(.callout.weight(.semibold))
                 Spacer()
-                if limit.spendControlReached == true || limit.rateLimitReachedType != nil {
+                if codex?.spendControlReached == true || codex?.rateLimitReachedType != nil {
                     Text("额度已用尽")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.red)
                 }
             }
 
-            if limit.windows.isEmpty {
+            if let featuredWindow {
+                windowRow(featuredWindow)
+            } else {
                 Text("当前没有额度窗口数据")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(limit.windows) { window in
-                    windowRow(window)
-                }
             }
 
-            if limit.hasCredits == true, let balance = limit.creditsBalance {
+            if !otherWindows.isEmpty || !otherLimits.isEmpty {
+                Divider()
+                DisclosureGroup("其他额度窗口") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(otherWindows) { window in
+                            windowRow(window)
+                        }
+                        ForEach(otherLimits) { limit in
+                            HStack {
+                                Text(limit.displayName)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                if limit.spendControlReached == true || limit.rateLimitReachedType != nil {
+                                    Text("额度已用尽")
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                            .font(.caption.weight(.medium))
+                            ForEach(limit.windows) { window in
+                                windowRow(window)
+                            }
+                            if limit.hasCredits == true, let balance = limit.creditsBalance {
+                                Label("余额 \(balance)", systemImage: "creditcard")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.caption)
+            }
+
+            if codex?.hasCredits == true, let balance = codex?.creditsBalance {
                 Label("余额 \(balance)", systemImage: "creditcard")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -153,13 +176,13 @@ struct UsagePopoverView: View {
             ProgressView(value: Double(window.remainingPercent), total: 100)
                 .tint(color(for: window.remainingPercent))
 
-            HStack {
-                Text("已使用 \(Int(window.usedPercent.rounded()))%")
-                Spacer()
-                Text(resetDescription(window.resetsAt))
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Text("已使用 \(Int(window.usedPercent.rounded()))%")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("重置：\(resetDescription(window.resetsAt))（本机时间）")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -304,9 +327,10 @@ struct UsagePopoverView: View {
     }
 
     private func resetDescription(_ date: Date) -> String {
-        guard date > Date() else { return "即将重置" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date()) + "重置"
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd EEE HH:mm"
+        return formatter.string(from: date)
     }
 }
