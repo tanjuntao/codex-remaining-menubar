@@ -3,11 +3,13 @@ import Foundation
 struct UsageSnapshot: Codable, Equatable, Sendable {
     let limits: [UsageLimit]
     let resetCreditsAvailable: Int?
+    let resetCredits: [UsageResetCredit]?
     let fetchedAt: Date
 
-    init(limits: [UsageLimit], resetCreditsAvailable: Int?, fetchedAt: Date = Date()) {
+    init(limits: [UsageLimit], resetCreditsAvailable: Int?, resetCredits: [UsageResetCredit]? = nil, fetchedAt: Date = Date()) {
         self.limits = limits
         self.resetCreditsAvailable = resetCreditsAvailable
+        self.resetCredits = resetCredits
         self.fetchedAt = fetchedAt
     }
 
@@ -29,7 +31,14 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
             throw UsageParsingError.noLimits
         }
 
-        let credits = root["rateLimitResetCredits"]?.objectValue?["availableCount"]?.intValue
+        let creditsSummary = root["rateLimitResetCredits"]?.objectValue
+        let credits = creditsSummary?["availableCount"]?.intValue
+        if case let .array(details) = creditsSummary?["credits"] {
+            var seenIDs = Set<String>()
+            resetCredits = details.compactMap(UsageResetCredit.init).filter { seenIDs.insert($0.id).inserted }
+        } else {
+            resetCredits = nil
+        }
         self.limits = parsedLimits.sorted {
             if $0.id == "codex" { return true }
             if $1.id == "codex" { return false }
@@ -44,6 +53,24 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
             .flatMap(\.windows)
             .map(\.remainingPercent)
             .min()
+    }
+
+    var availableResetCredits: [UsageResetCredit] {
+        (resetCredits ?? []).filter { $0.status == "available" }.sorted {
+            switch ($0.expiresAt, $1.expiresAt) {
+            case let (lhs?, rhs?) where lhs != rhs: return lhs < rhs
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return $0.id < $1.id
+            }
+        }
+    }
+
+    var hasCompleteResetCreditExpirations: Bool {
+        guard let count = resetCreditsAvailable, count > 0 else { return false }
+        let credits = availableResetCredits
+        // The service can return fewer detail rows than availableCount.
+        return credits.count == count && credits.allSatisfy { $0.expiration != .unknown }
     }
 }
 

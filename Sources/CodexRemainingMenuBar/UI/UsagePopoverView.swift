@@ -9,25 +9,44 @@ struct UsagePopoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
 
-            if viewModel.needsSignIn {
-                signInState
-            } else if let snapshot = viewModel.snapshot {
-                limits(snapshot)
-            } else if viewModel.isRefreshing {
-                loadingState
-            } else {
-                emptyState
+            if !viewModel.needsSignIn,
+               let snapshot = viewModel.snapshot,
+               let count = snapshot.resetCreditsAvailable, count > 0 {
+                ResetCreditsBanner(snapshot: snapshot, count: count)
             }
 
-            if let errorMessage = viewModel.errorMessage {
-                errorBanner(errorMessage)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if viewModel.needsSignIn {
+                        signInState
+                    } else {
+                        TokenUsageCard(
+                            snapshot: viewModel.tokenUsage,
+                            isRefreshing: viewModel.isRefreshing,
+                            errorMessage: viewModel.tokenUsageError
+                        )
+
+                        if let snapshot = viewModel.snapshot {
+                            limits(snapshot)
+                        } else if viewModel.isRefreshing {
+                            loadingState
+                        } else {
+                            emptyState
+                        }
+                    }
+
+                    if let errorMessage = viewModel.errorMessage {
+                        errorBanner(errorMessage)
+                    }
+                }
+                .padding(.vertical, 1)
             }
 
             Divider()
             footer
         }
         .padding(14)
-        .frame(width: 312)
+        .frame(width: 336)
     }
 
     private var header: some View {
@@ -77,18 +96,6 @@ struct UsagePopoverView: View {
         VStack(spacing: 12) {
             ForEach(snapshot.limits) { limit in
                 limitCard(limit)
-            }
-        }
-
-        if let count = snapshot.resetCreditsAvailable, count > 0 {
-            HStack {
-                Spacer()
-                Text("可重置 \(count) 次")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.12))
-                    .clipShape(Capsule())
             }
         }
     }

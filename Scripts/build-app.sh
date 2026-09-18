@@ -11,6 +11,7 @@ APP_NAME="Codex Remaining"
 APP_BUNDLE="${PROJECT_DIR}/dist/${APP_NAME}.app"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
+RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 EXECUTABLE_NAME="CodexRemainingMenuBar"
 INFO_PLIST="${PROJECT_DIR}/Resources/AppInfo.plist"
 APP_VERSION="${APP_VERSION:-$(plutil -extract CFBundleShortVersionString raw -o - "${INFO_PLIST}")}"
@@ -58,7 +59,7 @@ else
     BUILT_BINARIES+=("${bin_dir}/${EXECUTABLE_NAME}")
 fi
 
-mkdir -p "${PROJECT_DIR}/dist" "${MACOS_DIR}"
+mkdir -p "${PROJECT_DIR}/dist" "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 if (( ${#BUILT_BINARIES[@]} == 1 )); then
     install -m 755 "${BUILT_BINARIES[1]}" "${MACOS_DIR}/${EXECUTABLE_NAME}"
@@ -69,6 +70,7 @@ else
 fi
 
 install -m 644 "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
+install -m 644 "${PROJECT_DIR}/Resources/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
 plutil -replace CFBundleShortVersionString -string "${APP_VERSION}" "${CONTENTS_DIR}/Info.plist"
 plutil -replace CFBundleVersion -string "${BUILD_NUMBER}" "${CONTENTS_DIR}/Info.plist"
 

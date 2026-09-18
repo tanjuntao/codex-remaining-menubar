@@ -2,9 +2,11 @@ import Foundation
 
 struct UsageCache {
     private let fileManager: FileManager
+    private let directory: URL?
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, directory: URL? = nil) {
         self.fileManager = fileManager
+        self.directory = directory
     }
 
     func load() -> UsageSnapshot? {
@@ -23,7 +25,31 @@ struct UsageCache {
         }
     }
 
+    func loadTokenUsage() -> TokenUsageSnapshot? {
+        guard let data = try? Data(contentsOf: tokenUsageURL) else { return nil }
+        return try? JSONDecoder().decode(TokenUsageSnapshot.self, from: data)
+    }
+
+    func saveTokenUsage(_ snapshot: TokenUsageSnapshot) {
+        do {
+            try fileManager.createDirectory(at: tokenUsageURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(snapshot)
+            try data.write(to: tokenUsageURL, options: .atomic)
+        } catch {
+            // A cache write failure must not hide a successful response.
+        }
+    }
+
+    func clearTokenUsage() {
+        try? fileManager.removeItem(at: tokenUsageURL)
+    }
+
+    private var tokenUsageURL: URL {
+        cacheURL.deletingLastPathComponent().appendingPathComponent("token-usage-cache.json")
+    }
+
     private var cacheURL: URL {
+        if let directory { return directory.appendingPathComponent("usage-cache.json") }
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
         return base

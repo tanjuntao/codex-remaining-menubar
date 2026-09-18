@@ -14,6 +14,10 @@
 - 支持“图标 + 百分比”“仅图标”“仅百分比”三种菜单栏展示方式
 - 弹窗展示所有 `rateLimitsByLimitId` 额度桶
 - 展示已用/剩余比例、窗口长度和重置时间
+- 有可用重置次数时，在弹窗顶部固定显示醒目徽标，滚动明细时仍可查看
+- 顶部直接列出每张重置卡的到期时间，按到期先后排序、以本机时区展示
+- 展示今日、昨日、累计 Token 消耗，以及近 7 天趋势、单日峰值和连续使用天数
+- 点击趋势柱查看某日用量，展开“每日明细”查看全部历史记录，用量统一以 M（百万 Token）为单位、保留一位小数展示
 - 复用 Codex App Server 管理的 ChatGPT 登录状态
 - 未登录时发起官方 ChatGPT 浏览器登录
 - 每 5 分钟自动刷新，并监听额度变化通知
@@ -131,11 +135,25 @@ git push origin v0.1.0
 
 ## 数据与隐私
 
-应用不会读取 ChatGPT Cookie、不会提取 Keychain Token，也不会保存访问令牌。登录、Token 刷新和 Usage 请求都由本机 Codex App Server 负责。应用只缓存渲染所需的额度结果，缓存位于自己的 Application Support 目录。
+应用不会读取 ChatGPT Cookie、不会提取 Keychain Token，也不会保存访问令牌。登录、访问令牌刷新和 Usage 请求都由本机 Codex App Server 负责。应用缓存渲染所需的额度与 Token 统计结果，缓存位于自己的 Application Support 目录。
+
+### 每日 Token 统计
+
+使用官方 [Codex App Server](https://learn.chatgpt.com/docs/app-server) 的 `account/usage/read` 接口，直接读取账户的 `summary` 和 `dailyUsageBuckets`。无需扫描本地会话日志或打开 Codex 桌面客户端；只要 CLI 可用且已登录即可。此功能已在 Codex CLI `0.146.0` 验证，旧版 CLI 若不支持接口，会显示升级提示，剩余额度仍可正常读取。
+
+- 每 5 分钟、打开弹窗及手动刷新时获取统计；额度与 Token 请求独立处理，单项失败不影响另一项更新。
+- `lifetimeTokens` 为累计 Token，`peakDailyTokens` 为单日峰值；每日明细直接使用服务端的 `startDate` 和 `tokens`。
+- 服务端统计可能延迟，并非实时计数。“今日/昨日”按本机日历日期匹配服务端日期标签；接口未提供分桶时区，应用不会将其擅自换算为本地时区统计。
+- `null` 或缺失日期显示“— / 尚未返回”，只有接口明确返回 `0` 才显示零。历史明细的覆盖范围以接口返回为准。
+- Token 缓存保存在 `~/Library/Application Support/CodexRemainingMenuBar/token-usage-cache.json`。刷新失败时保留最后成功数据并显示缓存提示及原更新时间。
+
+### 重置卡期限
+
+从 `account/rateLimits/read` 返回的 `rateLimitResetCredits.credits[].expiresAt` 读取到期时间（Unix 秒时间戳），按本机时区直接展示每张卡的期限。只展示状态为 `available` 的卡片期限，次数以接口的 `availableCount` 为准。明细可能只返回部分卡片，此时提示“部分重置卡的期限尚未返回”；没有期限信息时显示“到期时间暂不可用”，明确返回 `expiresAt: null` 的卡片显示“无到期限制”。超过 5 张卡时可在顶部区域滚动查看全部期限。过期时间随额度结果一起刷新、缓存。
 
 ## 已知边界
 
-- 这里只展示 Codex App Server 返回的 Codex/ChatGPT rate-limit 数据，不代表 OpenAI Platform API 组织用量。
+- 这里只展示 Codex App Server 返回的 Codex/ChatGPT 剩余额度与 Token 活动统计，不代表 OpenAI Platform API 组织用量；Token 消耗量不能直接换算为剩余额度百分比。
 - App Server 协议会随 Codex CLI 版本演进；解析器会忽略未知字段，但重大协议升级可能需要适配。
 - GitHub Release 中的应用使用 ad-hoc 签名且未经 Apple Notarization，用户首次启动必须在系统设置中手动放行。
 - Mac App Store 沙箱会限制启动外部 CLI 和复用 `~/.codex`，因此当前仅采用 GitHub Release 直接分发。

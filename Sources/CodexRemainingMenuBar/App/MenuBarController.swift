@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class MenuBarController: NSObject {
-    private static let panelSize = NSSize(width: 312, height: 438)
+    private static let panelSize = NSSize(width: 336, height: 700)
     private static let panelSpacing: CGFloat = 6
     private static let fullUsageURL = URL(string: "https://chatgpt.com/codex/settings/usage")!
 
@@ -150,14 +150,18 @@ final class MenuBarController: NSObject {
         let buttonRectInWindow = button.convert(button.bounds, to: nil)
         let buttonRectOnScreen = buttonWindow.convertToScreen(buttonRectInWindow)
         let visibleFrame = buttonWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+        var panelSize = Self.panelSize
+        if let visibleFrame {
+            panelSize.height = min(panelSize.height, max(1, min(buttonRectOnScreen.minY, visibleFrame.maxY) - visibleFrame.minY - Self.panelSpacing))
+        }
 
         let origin = MenuBarPanelPositioner.origin(
             anchorRect: buttonRectOnScreen,
-            panelSize: Self.panelSize,
+            panelSize: panelSize,
             visibleFrame: visibleFrame,
             verticalSpacing: Self.panelSpacing
         )
-        panel.setFrame(NSRect(origin: origin, size: Self.panelSize), display: false)
+        panel.setFrame(NSRect(origin: origin, size: panelSize), display: false)
         panel.makeKeyAndOrderFront(nil)
         installDismissalMonitors()
     }

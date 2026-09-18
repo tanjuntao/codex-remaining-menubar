@@ -1,0 +1,70 @@
+import SwiftUI
+
+struct ResetCreditsBanner: View {
+    let snapshot: UsageSnapshot
+    let count: Int
+
+    var body: some View {
+        let credits = snapshot.availableResetCredits
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Label("可重置次数", systemImage: "arrow.counterclockwise.circle.fill")
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text("\(count) 次")
+                    .font(.system(size: 19, weight: .bold, design: .rounded).monospacedDigit())
+            }
+            .accessibilityElement(children: .combine)
+
+            if credits.isEmpty {
+                Text("到期时间暂不可用")
+                    .font(.caption)
+            } else {
+                Text("到期时间（本机时区）")
+                    .font(.caption2)
+                    .help(TimeZone.current.identifier)
+
+                if credits.count > 5 {
+                    ScrollView {
+                        expirationRows(credits)
+                    }
+                    .frame(height: 140)
+                } else {
+                    expirationRows(credits)
+                }
+
+                if !snapshot.hasCompleteResetCreditExpirations {
+                    Text("部分重置卡的期限尚未返回。")
+                        .font(.caption2)
+                }
+            }
+        }
+        .foregroundStyle(Color.accentColor)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func expirationRows(_ credits: [UsageResetCredit]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(credits.enumerated()), id: \.element.id) { index, credit in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("重置卡 \(index + 1)")
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(credit.expirationDescription)
+                            .monospacedDigit()
+                        if let expiresAt = credit.expiresAt, expiresAt <= Date() {
+                            Text("已到期，待刷新")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .font(.caption)
+    }
+}

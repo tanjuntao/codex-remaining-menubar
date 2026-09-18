@@ -1,12 +1,25 @@
 import Foundation
 
 @MainActor
-final class CodexAppServerClient {
+protocol CodexUsageClient: AnyObject {
+    var notificationHandler: CodexAppServerClient.NotificationHandler? { get set }
+    var executableURL: URL? { get }
+    func startIfNeeded() async throws
+    func readAccount() async throws -> JSONValue
+    func readRateLimits() async throws -> JSONValue
+    func readTokenUsage() async throws -> JSONValue
+    func startChatGPTLogin() async throws -> URL
+    func stop()
+}
+
+@MainActor
+final class CodexAppServerClient: CodexUsageClient {
     enum ClientError: LocalizedError {
         case executableNotFound
         case serverNotRunning
         case serverExited(Int32, String?)
         case invalidResponse
+        case requestTimedOut
         case rpc(code: Int, message: String)
 
         var errorDescription: String? {
@@ -21,6 +34,8 @@ final class CodexAppServerClient {
                 return summary + "\n" + details
             case .invalidResponse:
                 return "Codex App Server 返回了无效响应。"
+            case .requestTimedOut:
+                return "Codex 请求超时，请稍后刷新重试。"
             case let .rpc(_, message):
                 return message
             }
@@ -37,6 +52,7 @@ final class CodexAppServerClient {
     private var errorBuffer = Data()
     private var nextRequestID = 1
     private var pending: [Int: CheckedContinuation<JSONValue, Error>] = [:]
+    private var requestTimeouts: [Int: Task<Void, Never>] = [:]
     private(set) var executableURL: URL?
 
     var isRunning: Bool {
@@ -139,6 +155,10 @@ final class CodexAppServerClient {
         try await request(method: "account/rateLimits/read", params: nil)
     }
 
+    func readTokenUsage() async throws -> JSONValue {
+        try await request(method: "account/usage/read", params: nil)
+    }
+
     func startChatGPTLogin() async throws -> URL {
         let result = try await request(
             method: "account/login/start",
@@ -163,10 +183,20 @@ final class CodexAppServerClient {
 
         return try await withCheckedThrowingContinuation { continuation in
             pending[id] = continuation
+            requestTimeouts[id] = Task { [weak self] in
+                do {
+                    try await Task.sleep(for: .seconds(30))
+                } catch {
+                    return
+                }
+                self?.requestTimeouts.removeValue(forKey: id)
+                self?.pending.removeValue(forKey: id)?.resume(throwing: ClientError.requestTimedOut)
+            }
             do {
                 try writeMessage(id: id, method: method, params: params)
             } catch {
                 pending.removeValue(forKey: id)
+                requestTimeouts.removeValue(forKey: id)?.cancel()
                 continuation.resume(throwing: error)
             }
         }
@@ -204,6 +234,7 @@ final class CodexAppServerClient {
         }
 
         if let id = envelope.id, let continuation = pending.removeValue(forKey: id) {
+            requestTimeouts.removeValue(forKey: id)?.cancel()
             if let error = envelope.error {
                 continuation.resume(throwing: ClientError.rpc(code: error.code, message: error.message))
             } else if let result = envelope.result {
@@ -238,6 +269,8 @@ final class CodexAppServerClient {
     }
 
     private func failPending(with error: Error) {
+        requestTimeouts.values.forEach { $0.cancel() }
+        requestTimeouts.removeAll()
         let continuations = pending.values
         pending.removeAll()
         continuations.forEach { $0.resume(throwing: error) }
