@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class MenuBarController: NSObject {
-    private static let panelSize = NSSize(width: 380, height: 820)
+    private static let panelSize = NSSize(width: 340, height: 820)
     private static let panelSpacing: CGFloat = 6
     private static let fullUsageURL = URL(string: "https://chatgpt.com/codex/settings/usage")!
 

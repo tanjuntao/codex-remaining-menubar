@@ -59,13 +59,13 @@ struct TokenUsageCalendar: View {
                         .padding(.trailing, 18)
                     }
                     .frame(height: 134)
-                    // Twenty week columns fit at the popover's current width. Shorter
+                    // Eighteen week columns fit at the popover's current width. Shorter
                     // histories stay left aligned instead of scrolling to a trailing anchor.
                     .onAppear {
-                        if weeks.count > 20, let last = weeks.last { proxy.scrollTo(last.id, anchor: .trailing) }
+                        if weeks.count > 18, let last = weeks.last { proxy.scrollTo(last.id, anchor: .trailing) }
                     }
                     .onChange(of: weeks.last?.id) { last in
-                        if weeks.count > 20, let last { proxy.scrollTo(last, anchor: .trailing) }
+                        if weeks.count > 18, let last { proxy.scrollTo(last, anchor: .trailing) }
                     }
                 }
             }
