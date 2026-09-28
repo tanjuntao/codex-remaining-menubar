@@ -73,7 +73,7 @@ struct TokenUsageCard: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if let selected {
-                        Text("\(selected.shortLabel) · \(selected.tokens == nil ? "尚未返回" : TokenUsageSnapshot.formattedTokens(selected.tokens))")
+                        Text("\(selected.shortLabel) · \(selected.tokens == nil ? "无 Token 消耗" : TokenUsageSnapshot.formattedTokens(selected.tokens))")
                             .monospacedDigit()
                     }
                 }
@@ -101,7 +101,7 @@ struct TokenUsageCard: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         } else if today?.tokens == nil {
-            Text("今日数据尚未返回\(snapshot.dailyUsageBuckets?.last.map { " · 最新 \($0.startDate)" } ?? "")")
+            Text("今日无 Token 消耗")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -136,7 +136,7 @@ struct TokenUsageCard: View {
                     Text(day.shortLabel)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text(day.tokens == nil ? "尚未返回" : TokenUsageSnapshot.formattedTokens(day.tokens))
+                    Text(day.tokens == nil ? "无 Token 消耗" : TokenUsageSnapshot.formattedTokens(day.tokens))
                         .fontWeight(.medium)
                         .foregroundStyle(day.tokens == nil ? .secondary : .primary)
                 }
@@ -156,8 +156,8 @@ struct TokenUsageCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(day.dateKey)：\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "尚未返回")")
-        .accessibilityLabel("\(day.dateKey)，\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "尚未返回")")
+        .help("\(day.dateKey)：\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "无 Token 消耗")")
+        .accessibilityLabel("\(day.dateKey)，\(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "无 Token 消耗")")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

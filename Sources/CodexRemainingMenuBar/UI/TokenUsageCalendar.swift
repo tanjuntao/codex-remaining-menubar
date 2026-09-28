@@ -88,7 +88,7 @@ struct TokenUsageCalendar: View {
                 RoundedRectangle(cornerRadius: 2)
                     .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
                     .frame(width: 10, height: 10)
-                Text("尚未返回")
+                Text("无 Token 消耗")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -139,7 +139,7 @@ struct TokenUsageCalendar: View {
     }
 
     private func dayDescription(_ day: TokenUsageSnapshot.Day) -> String {
-        "\(day.dateKey) · \(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "尚未返回")"
+        "\(day.dateKey) · \(day.tokens.map { TokenUsageSnapshot.formattedTokens($0) } ?? "无 Token 消耗")"
     }
 
     private func monthLabel(for week: TokenUsageSnapshot.CalendarWeek, isFirstWeek: Bool) -> String {
