@@ -19,12 +19,15 @@ struct ResetCreditsBanner: View {
             if count == 0 {
                 Text("暂无可用重置次数")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
             } else if credits.isEmpty {
                 Text("到期时间暂不可用")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("到期时间（本机时区）")
                     .font(.caption2)
+                    .foregroundStyle(.secondary)
                     .help(TimeZone.current.identifier)
 
                 if credits.count > 5 {
@@ -39,14 +42,18 @@ struct ResetCreditsBanner: View {
                 if !snapshot.hasCompleteResetCreditExpirations {
                     Text("部分重置卡的期限尚未返回。")
                         .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .foregroundStyle(Color.accentColor)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.accentColor.opacity(0.12))
+        .foregroundStyle(.primary)
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
     }
 
     private func expirationRows(_ credits: [UsageResetCredit]) -> some View {
@@ -69,5 +76,6 @@ struct ResetCreditsBanner: View {
             }
         }
         .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
