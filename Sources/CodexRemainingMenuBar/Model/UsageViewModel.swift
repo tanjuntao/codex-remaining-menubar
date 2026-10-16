@@ -7,6 +7,7 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var tokenUsage: TokenUsageSnapshot?
     @Published private(set) var tokenUsageError: String?
     @Published private(set) var isRefreshing = false
+    @Published private(set) var hasFreshQuotaData = false
     @Published private(set) var needsSignIn = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var codexExecutablePath: String?
@@ -33,10 +34,12 @@ final class UsageViewModel: ObservableObject {
             guard let self else { return }
             switch method {
             case "account/updated":
+                self.hasFreshQuotaData = false
                 self.tokenUsage = nil
                 self.cache.clearTokenUsage()
                 Task { await self.refresh() }
             case "account/rateLimits/updated", "account/login/completed":
+                self.hasFreshQuotaData = false
                 Task { await self.refresh() }
             default:
                 break
@@ -73,6 +76,7 @@ final class UsageViewModel: ObservableObject {
             needsSignIn = account == .null || accountType == "apiKey" || accountType == "amazonBedrock"
 
             guard !needsSignIn else {
+                hasFreshQuotaData = false
                 tokenUsage = nil
                 cache.clearTokenUsage()
                 errorMessage = nil
@@ -84,6 +88,7 @@ final class UsageViewModel: ObservableObject {
             async let tokensRefresh: Void = refreshTokenUsage()
             _ = await (limitsRefresh, tokensRefresh)
         } catch {
+            hasFreshQuotaData = false
             errorMessage = error.localizedDescription
             tokenUsageError = "暂时无法刷新 Token 用量。"
         }
@@ -94,8 +99,11 @@ final class UsageViewModel: ObservableObject {
             let result = try await client.readRateLimits()
             let updatedSnapshot = try UsageSnapshot(appServerResult: result)
             snapshot = updatedSnapshot
+            hasFreshQuotaData = true
+            errorMessage = nil
             cache.save(updatedSnapshot)
         } catch {
+            hasFreshQuotaData = false
             errorMessage = error.localizedDescription
         }
     }

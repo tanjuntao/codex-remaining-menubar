@@ -46,12 +46,15 @@ final class MenuBarController: NSObject {
                 viewModel.$errorMessage,
                 viewModel.$menuBarDisplayMode
             )
-            .sink { [weak self] snapshot, isRefreshing, errorMessage, displayMode in
+            .combineLatest(viewModel.$hasFreshQuotaData)
+            .sink { [weak self] values, hasFreshQuotaData in
+                let (snapshot, isRefreshing, errorMessage, displayMode) = values
                 self?.updateStatusItem(
                     snapshot: snapshot,
                     isRefreshing: isRefreshing,
                     errorMessage: errorMessage,
-                    displayMode: displayMode
+                    displayMode: displayMode,
+                    hasFreshQuotaData: hasFreshQuotaData
                 )
             }
             .store(in: &cancellables)
@@ -184,41 +187,80 @@ final class MenuBarController: NSObject {
         snapshot: UsageSnapshot?,
         isRefreshing: Bool,
         errorMessage: String?,
-        displayMode: MenuBarDisplayMode
+        displayMode: MenuBarDisplayMode,
+        hasFreshQuotaData: Bool
     ) {
         guard let button = statusItem.button else { return }
+        let presentation = MenuBarStatusPresentation.make(
+            snapshot: snapshot,
+            isRefreshing: isRefreshing,
+            errorMessage: errorMessage,
+            displayMode: displayMode,
+            hasFreshQuotaData: hasFreshQuotaData
+        )
 
-        let iconName: String
-        if snapshot == nil, errorMessage != nil {
-            iconName = "exclamationmark.triangle"
-        } else if snapshot == nil, isRefreshing {
-            iconName = "arrow.triangle.2.circlepath"
-        } else {
-            iconName = "gauge.with.dots.needle.33percent"
-        }
-
-        if displayMode == .percentageOnly {
-            button.image = nil
-        } else {
+        if let iconName = presentation.iconName {
             button.image = NSImage(
                 systemSymbolName: iconName,
                 accessibilityDescription: "Codex Usage"
             )
             button.imagePosition = .imageLeading
+        } else {
+            button.image = nil
         }
 
-        if let remaining = snapshot?.mostConstrainedRemainingPercent {
-            button.title = displayMode == .iconOnly ? "" : " \(remaining)%"
-            button.toolTip = "Codex 剩余额度 \(remaining)%"
-        } else if isRefreshing {
-            button.title = displayMode == .iconOnly ? "" : " …"
-            button.toolTip = "正在读取 Codex Usage"
+        button.title = presentation.title
+        button.toolTip = presentation.toolTip
+    }
+}
+
+struct MenuBarStatusPresentation: Equatable {
+    let iconName: String?
+    let title: String
+    let toolTip: String
+
+    static func make(
+        snapshot: UsageSnapshot?,
+        isRefreshing: Bool,
+        errorMessage: String?,
+        displayMode: MenuBarDisplayMode,
+        hasFreshQuotaData: Bool
+    ) -> Self {
+        let iconName: String?
+        if displayMode == .percentageOnly {
+            iconName = nil
         } else if errorMessage != nil {
-            button.title = displayMode == .iconOnly ? "" : " !"
-            button.toolTip = errorMessage
+            iconName = "exclamationmark.triangle"
+        } else if !hasFreshQuotaData, isRefreshing {
+            iconName = "arrow.triangle.2.circlepath"
         } else {
-            button.title = displayMode == .iconOnly ? "" : " —"
-            button.toolTip = "Codex Usage"
+            iconName = "gauge.with.dots.needle.33percent"
+        }
+
+        if let errorMessage {
+            return Self(
+                iconName: iconName,
+                title: displayMode == .iconOnly ? "" : " !",
+                toolTip: errorMessage
+            )
+        } else if hasFreshQuotaData, let remaining = snapshot?.mostConstrainedRemainingPercent {
+            return Self(
+                iconName: iconName,
+                title: displayMode == .iconOnly ? "" : " \(remaining)%",
+                toolTip: "Codex 剩余额度 \(remaining)%"
+            )
+        } else if isRefreshing {
+            return Self(
+                iconName: iconName,
+                title: displayMode == .iconOnly ? "" : " …",
+                toolTip: "正在读取 Codex Usage"
+            )
+        } else {
+            return Self(
+                iconName: iconName,
+                title: displayMode == .iconOnly ? "" : " —",
+                toolTip: "Codex Usage"
+            )
         }
     }
 }
