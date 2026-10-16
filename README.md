@@ -5,7 +5,8 @@
 [下载最新版本](https://github.com/tanjuntao/codex-remaining-menubar/releases/latest)
 
 <p align="center">
-  <img src="./assets/screenshot.png" alt="Codex Remaining 菜单栏应用界面" width="360">
+  <img src="./assets/screenshot1.png" alt="Codex Remaining 额度与重置卡概览" width="45%">
+  <img src="./assets/screenshot2.png" alt="Codex Remaining Token 消耗与每日活动详情" width="45%">
 </p>
 
 ## 功能亮点
